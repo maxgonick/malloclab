@@ -161,6 +161,7 @@ void *mm_malloc(size_t size) {
  */
 /* $begin mmfree */
 void mm_free(void *payload) {
+    //pointer to front of allocated block
     block_t *block = payload - sizeof(header_t);
     block->allocated = FREE;
     footer_t *footer = get_footer(block);
@@ -218,6 +219,57 @@ void mm_checkheap(int verbose) {
 }
 
 /* The remaining routines are internal helper routines */
+
+// Adding newly freed block onto linked list
+static void list_push(block_t *newblock){
+    
+    //Setting up newblock pointers
+    newblock->body.next = head->body.next;
+    newblock->body.prev = NULL;
+    if(head->body.next != NULL){
+       head->body.next->body.prev = newblock;
+    }
+    
+    head = newblock;
+    return;
+}
+
+// Removing free block from list
+static void list_pop(block_t *removeblock){
+
+    //Case 1 (Only block in list)
+    if(removeblock->body.prev == NULL && removeblock->body.next == NULL){
+        head = NULL;
+        extend_heap();
+        return;
+    }
+
+    //Case 2 (First block in list)
+    else if(head == removeblock){
+        head == removeblock->body.next;
+        removeblock->body.next->body.prev = NULL;
+        removeblock->body.prev = NULL;
+        return;
+    }
+    //Case 3 (Last block in list)
+    else if(removeblock->body.next == NULL){
+        removeblock->body.prev->body.next = NULL;
+        removeblock->body.prev = NULL;
+        return;
+    }
+    //Case 4 (Middle of list)
+    else{
+        //Set pointers for next block
+        removeblock->body.next->body.prev = removeblock->body.prev;
+        //Set pointer for previous block
+        removeblock->body.prev->body.next = removeblock->body.next;
+        //null out removeblock pointer
+        removeblock->body.next = NULL;
+        removeblock->body.prev = NULL;
+        return;
+    }
+
+}
 
 /*
  * extend_heap - Extend heap with free block and return its block pointer

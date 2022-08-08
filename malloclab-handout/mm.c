@@ -99,6 +99,8 @@ int mm_init(void) {
     block_t *init_block = (void *)prologue + sizeof(header_t);
     init_block->allocated = FREE;
     init_block->block_size = CHUNKSIZE - OVERHEAD;
+    init_block->body.next = NULL;
+    init_block->body.prev = NULL;
     footer_t *init_footer = get_footer(init_block);
     init_footer->allocated = FREE;
     init_footer->block_size = init_block->block_size;
@@ -265,6 +267,9 @@ static void place(block_t *block, size_t asize) {
         block_t *new_block = (void *)block + block->block_size;
         new_block->block_size = split_size;
         new_block->allocated = FREE;
+        /* update pointers of new free block */
+        new_block->body.prev = NULL;
+        new_block->body.next = block->body.next;
         /* update the footer of the new free block */
         footer_t *new_footer = get_footer(new_block);
         new_footer->block_size = split_size;

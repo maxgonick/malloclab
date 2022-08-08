@@ -39,7 +39,7 @@ team_t team = {
     /* UID */
     "705683791",
     /* Custom message (16 chars) */
-    "bello",
+    "malloc or mallet",
 };
 
 typedef struct {
@@ -50,7 +50,7 @@ typedef struct {
 
 typedef header_t footer_t;
 
-typedef struct {
+typedef struct block_t{
     uint32_t allocated : 1;
     uint32_t block_size : 31;
     uint32_t _;
@@ -73,7 +73,8 @@ enum block_state { FREE,
 
 /* Global variables */
 static block_t *prologue; /* pointer to first block */
-
+static block_t *head; /* pointer to start of free list */
+ 
 /* function prototypes for internal helper routines */
 static block_t *extend_heap(size_t words);
 static void place(block_t *block, size_t asize);
@@ -101,6 +102,8 @@ int mm_init(void) {
     footer_t *init_footer = get_footer(init_block);
     init_footer->allocated = FREE;
     init_footer->block_size = init_block->block_size;
+    /* Put head pointer on first free block */
+    head = init_block;
     /* initialize the epilogue - block size 0 will be used as a terminating condition */
     block_t *epilogue = (void *)init_block + init_block->block_size;
     epilogue->allocated = ALLOC;
@@ -127,7 +130,6 @@ void *mm_malloc(size_t size) {
     size += OVERHEAD;
 
     asize = ((size + 7) >> 3) << 3; /* align to multiple of 8 */
-    
     if (asize < MIN_BLOCK_SIZE) {
         asize = MIN_BLOCK_SIZE;
     }
@@ -282,8 +284,8 @@ static void place(block_t *block, size_t asize) {
 static block_t *find_fit(size_t asize) {
     /* first fit search */
     block_t *b;
-
-    for (b = (void*)prologue + prologue->block_size; b->block_size > 0; b = (void *)b + b->block_size) {
+    //Starting at first block traverse using next pointers
+    for (b = head; b->block_size > 0; b = b->body.next) {
         /* block must be free and the size must be large enough to hold the request */
         if (!b->allocated && asize <= b->block_size) {
             return b;

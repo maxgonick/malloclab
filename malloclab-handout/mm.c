@@ -83,6 +83,8 @@ static block_t *coalesce(block_t *block);
 static footer_t *get_footer(block_t *block);
 static void printblock(block_t *block);
 static void checkblock(block_t *block);
+static void list_push(block_t *newblock);
+static void list_pop(block_t *removeblock);
 
 /*
  * mm_init - Initialize the memory manager
@@ -166,7 +168,9 @@ void mm_free(void *payload) {
     block->allocated = FREE;
     footer_t *footer = get_footer(block);
     footer->allocated = FREE;
+    list_push(block);
     coalesce(block);
+
 }
 
 /* $end mmfree */
@@ -223,11 +227,17 @@ void mm_checkheap(int verbose) {
 // Adding newly freed block onto linked list
 static void list_push(block_t *newblock){
     
-    //Setting up newblock pointers
-    newblock->body.next = head->body.next;
-    newblock->body.prev = NULL;
-    if(head->body.next != NULL){
-       head->body.next->body.prev = newblock;
+    //If list is empty
+    if(head == NULL){
+       head = newblock; 
+       newblock->body.prev = NULL;
+       newblock->body.next = NULL;
+    }
+    else{
+        //Setting up newblock pointers
+    newblock->body.next = head;
+    newblock->body.prev = NULL; 
+    head->body.prev = newblock;
     }
     
     head = newblock;
@@ -240,13 +250,12 @@ static void list_pop(block_t *removeblock){
     //Case 1 (Only block in list)
     if(removeblock->body.prev == NULL && removeblock->body.next == NULL){
         head = NULL;
-        extend_heap();
         return;
     }
 
     //Case 2 (First block in list)
     else if(head == removeblock){
-        head == removeblock->body.next;
+        head = removeblock->body.next;
         removeblock->body.next->body.prev = NULL;
         removeblock->body.prev = NULL;
         return;
@@ -309,6 +318,7 @@ static void place(block_t *block, size_t asize) {
     size_t split_size = block->block_size - asize;
     if (split_size >= MIN_BLOCK_SIZE) {
         /* split the block by updating the header and marking it allocated*/
+        list_pop(block);
         block->block_size = asize;
         block->allocated = ALLOC;
         /* set footer of allocated block*/
@@ -319,14 +329,14 @@ static void place(block_t *block, size_t asize) {
         block_t *new_block = (void *)block + block->block_size;
         new_block->block_size = split_size;
         new_block->allocated = FREE;
-        /* update pointers of new free block */
-        new_block->body.prev = NULL;
-        new_block->body.next = block->body.next;
         /* update the footer of the new free block */
         footer_t *new_footer = get_footer(new_block);
         new_footer->block_size = split_size;
         new_footer->allocated = FREE;
+        //Add new_block to list
+        list_push(new_block);
     } else {
+        list_pop(block);
         /* splitting the block will cause a splinter so we just include it in the allocated block */
         block->allocated = ALLOC;
         footer_t *footer = get_footer(block);
@@ -341,8 +351,12 @@ static void place(block_t *block, size_t asize) {
 static block_t *find_fit(size_t asize) {
     /* first fit search */
     block_t *b;
+    //Checking if list is empty
+    if(head == NULL){
+        return NULL;
+    }
     //Starting at first block traverse using next pointers
-    for (b = head; b->block_size > 0; b = b->body.next) {
+    for (b = head; b != NULL; b = b->body.next) {  //
         /* block must be free and the size must be large enough to hold the request */
         if (!b->allocated && asize <= b->block_size) {
             return b;
@@ -366,11 +380,14 @@ static block_t *coalesce(block_t *block) {
     }
 
     else if (prev_alloc && !next_alloc) { /* Case 2 */
+    block_t *next_block = (void *) next_header;
         /* Update header of current block to include next block's size */
         block->block_size += next_header->block_size;
         /* Update footer of next block to reflect new size */
         footer_t *next_footer = get_footer(block);
         next_footer->block_size = block->block_size;
+        //Remove *2nd* part of block from list
+        list_pop(next_block);
     }
 
     else if (!prev_alloc && next_alloc) { /* Case 3 */
@@ -380,6 +397,7 @@ static block_t *coalesce(block_t *block) {
         /* Update footer of current block to reflect new size */
         footer_t *footer = get_footer(prev_block);
         footer->block_size = prev_block->block_size;
+        list_pop(block);
         block = prev_block;
     }
 
@@ -390,6 +408,9 @@ static block_t *coalesce(block_t *block) {
         /* Update footer of next block to reflect new size */
         footer_t *next_footer = get_footer(prev_block);
         next_footer->block_size = prev_block->block_size;
+        //Change pointers of list
+        list_pop(block);
+        list_pop(next_header);
         block = prev_block;
     }
 

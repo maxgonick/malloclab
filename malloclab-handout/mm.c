@@ -101,6 +101,7 @@ int mm_init(void) {
     block_t *init_block = (void *)prologue + sizeof(header_t);
     init_block->allocated = FREE;
     init_block->block_size = CHUNKSIZE - OVERHEAD;
+    //Setting pointers for explicit free
     init_block->body.next = NULL;
     init_block->body.prev = NULL;
     footer_t *init_footer = get_footer(init_block);
@@ -238,9 +239,9 @@ static void list_push(block_t *newblock){
     newblock->body.next = head;
     newblock->body.prev = NULL; 
     head->body.prev = newblock;
+    head = newblock;
     }
     
-    head = newblock;
     return;
 }
 
@@ -250,6 +251,8 @@ static void list_pop(block_t *removeblock){
     //Case 1 (Only block in list)
     if(removeblock->body.prev == NULL && removeblock->body.next == NULL){
         head = NULL;
+        removeblock->body.next = NULL;
+        removeblock->body.prev = NULL;
         return;
     }
 
@@ -317,8 +320,9 @@ static block_t *extend_heap(size_t words) {
 static void place(block_t *block, size_t asize) {
     size_t split_size = block->block_size - asize;
     if (split_size >= MIN_BLOCK_SIZE) {
-        /* split the block by updating the header and marking it allocated*/
+        //Remove block from free list
         list_pop(block);
+        /* split the block by updating the header and marking it allocated*/
         block->block_size = asize;
         block->allocated = ALLOC;
         /* set footer of allocated block*/
@@ -373,6 +377,8 @@ static block_t *coalesce(block_t *block) {
     header_t *next_header = (void *)block + block->block_size;
     bool prev_alloc = prev_footer->allocated;
     bool next_alloc = next_header->allocated;
+    block_t *next_block = (void *)next_header;
+    block_t *prev_block = (void *)prev_footer - prev_footer->block_size + sizeof(header_t);
 
     if (prev_alloc && next_alloc) { /* Case 1 */
         /* no coalesceing */
@@ -380,28 +386,33 @@ static block_t *coalesce(block_t *block) {
     }
 
     else if (prev_alloc && !next_alloc) { /* Case 2 */
-    block_t *next_block = (void *) next_header;
+        list_pop(next_block);
+        list_pop(block);
         /* Update header of current block to include next block's size */
         block->block_size += next_header->block_size;
         /* Update footer of next block to reflect new size */
         footer_t *next_footer = get_footer(block);
         next_footer->block_size = block->block_size;
         //Remove *2nd* part of block from list
-        list_pop(next_block);
+        list_push(block);
     }
 
     else if (!prev_alloc && next_alloc) { /* Case 3 */
+        list_pop(block);
+        list_pop(prev_block);
         /* Update header of prev block to include current block's size */
-        block_t *prev_block = (void *)prev_footer - prev_footer->block_size + sizeof(header_t);
         prev_block->block_size += block->block_size;
         /* Update footer of current block to reflect new size */
         footer_t *footer = get_footer(prev_block);
         footer->block_size = prev_block->block_size;
-        list_pop(block);
+        list_push(prev_block);
         block = prev_block;
     }
 
     else { /* Case 4 */
+        list_pop(block);
+        list_pop(prev_block);
+        list_pop(next_block);
         /* Update header of prev block to include current and next block's size */
         block_t *prev_block = (void *)prev_footer - prev_footer->block_size + sizeof(header_t);
         prev_block->block_size += block->block_size + next_header->block_size;
@@ -409,8 +420,7 @@ static block_t *coalesce(block_t *block) {
         footer_t *next_footer = get_footer(prev_block);
         next_footer->block_size = prev_block->block_size;
         //Change pointers of list
-        list_pop(block);
-        list_pop(next_header);
+        list_push(prev_block);
         block = prev_block;
     }
 

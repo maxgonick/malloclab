@@ -6,7 +6,7 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Tue Aug  9 08:31:11 2022
+# Make data base, printed on Tue Aug  9 17:34:42 2022
 
 # Variables
 
@@ -45,9 +45,9 @@ VSCODE_NLS_CONFIG = {"locale":"en-us","availableLanguages":{},"_languagePackSupp
 # environment
 _ = /usr/share/code/code
 # makefile (from 'Makefile', line 5)
-CFLAGS = -Wall -g -std=gnu99
+CFLAGS = -Wall -g -std=gnu99 -fsanitize=address
 # environment
-JOURNAL_STREAM = 8:46054
+JOURNAL_STREAM = 8:50623
 # environment
 XDG_CONFIG_DIRS = /etc/xdg/xdg-ubuntu:/etc/xdg
 # makefile (from 'Makefile', line 1)
@@ -67,7 +67,7 @@ DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1000/bus
 # makefile (from 'Makefile', line 7)
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 # environment
-MANAGERPID = 1671
+MANAGERPID = 1679
 # environment
 LESSOPEN = | /usr/bin/lesspipe %s
 # environment
@@ -79,7 +79,7 @@ PATH = /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/
 # environment
 GPG_AGENT_INFO = /run/user/1000/gnupg/S.gpg-agent:0:1
 # environment
-SESSION_MANAGER = local/deda:@/tmp/.ICE-unix/1925,unix/deda:/tmp/.ICE-unix/1925
+SESSION_MANAGER = local/deda:@/tmp/.ICE-unix/1935,unix/deda:/tmp/.ICE-unix/1935
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # environment
@@ -87,7 +87,7 @@ XDG_MENU_PREFIX = gnome-
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-INVOCATION_ID = a2748f68d7c54509afc3177d22cc9492
+INVOCATION_ID = 123cfa676c064f1fb223b7dfef882c17
 # default
 .FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell archives jobserver output-sync check-symlink load
 # environment
@@ -97,7 +97,7 @@ XDG_SESSION_DESKTOP = ubuntu
 # environment
 SSH_AUTH_SOCK = /run/user/1000/keyring/ssh
 # environment
-GIO_LAUNCHED_DESKTOP_FILE_PID = 2397
+GIO_LAUNCHED_DESKTOP_FILE_PID = 3059
 # automatic
 %F = $(notdir $%)
 # environment
@@ -107,7 +107,7 @@ PWD = /home/maxgonick/Desktop/malloc/malloclab/malloclab-handout
 # default
 .LOADED := 
 # environment
-SSH_AGENT_PID = 1859
+SSH_AGENT_PID = 1869
 # environment
 ORIGINAL_XDG_CURRENT_DESKTOP = ubuntu:GNOME
 # environment
@@ -203,7 +203,7 @@ GJS_DEBUG_OUTPUT = stderr
 # environment
 LANG = C
 # environment
-VSCODE_PID = 2397
+VSCODE_PID = 3059
 # variable set hash-table stats:
 # Load=97/1024=9%, Rehash=0, Collisions=15/128=12%
 
@@ -271,7 +271,7 @@ memlib.c:
 # Not a target:
 Makefile:
 #  Implicit rule search has been done.
-#  Last modified 2022-08-06 00:03:17.044826277
+#  Last modified 2022-08-09 17:34:41.002707993
 #  File has been updated.
 #  Successfully updated.
 
@@ -309,7 +309,6 @@ memlib.h:
 mm.c:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
- 
 #  File has not been updated.
 
 # Not a target:
@@ -352,6 +351,7 @@ clean:
 # automatic
 # % := 
 # automatic
+ 
 # * := 
 # automatic
 # + := 
@@ -438,6 +438,6 @@ ftimer.h:
 # strcache performance: lookups = 105 / hit rate = 62%
 # hash-table stats:
 # Load=39/8192=0%, Rehash=0, Collisions=1/105=1%
-# Finished Make data base on Tue Aug  9 08:31:11 2022
+# Finished Make data base on Tue Aug  9 17:34:42 2022
 
  

@@ -39,7 +39,7 @@ team_t team = {
     /* UID */
     "705683791",
     /* Custom message (16 chars) */
-    "malloc or mallet",
+    "meep",
 };
 
 typedef struct {
@@ -85,6 +85,69 @@ static void printblock(block_t *block);
 static void checkblock(block_t *block);
 static void list_push(block_t *newblock);
 static void list_pop(block_t *removeblock);
+
+// static void debug_explicit_list(int depth) {
+//   printf("\nDEBUG EXPLICIT LIST: \n");
+
+//   if (head == NULL) {
+//     printf("0 elements.\n");
+//     return;
+//   }
+
+//   int f_len = 0;
+//   int b_len = 0;
+
+//   // Traverse forward.
+//   block_t *forward = head;
+//   int f_idx = 0;
+
+//   for (; f_idx < depth; f_idx++) {
+//     if (forward->body.next == NULL) {
+//       printf("%p (%d bytes) TAIL\n", forward, forward->block_size);
+//       f_len++;
+//       printf("  Forward traversal: %d elements.\n", f_len);
+//       break;
+//     }
+
+//     printf("%p (%d bytes) -> ", forward, forward->block_size);
+//     forward = forward->body.next;
+//     f_len++;
+//   }
+
+//   if (f_idx == depth) {
+//     printf("\nWARNING: Reached forward depth limit.\n");
+//   }
+
+//   // Traverse backwards.
+//   block_t *backward = forward;
+//   int b_idx = 0;
+
+//   for (; b_idx < depth; b_idx++) {
+//     if (backward->body.prev == NULL) {
+//       printf("%p (%d bytes) HEAD\n", backward, backward->block_size);
+//       b_len++;
+//       printf("  Backward traversal: %d elements.\n", b_len);
+//       break;
+//     }
+
+//     printf("%p (%d bytes) -> ", backward, backward->block_size);
+//     backward = backward->body.prev;
+//     b_len++;
+//   }
+
+//   if (b_idx == depth) {
+//     printf("\nWARNING: Reached backward depth limit.\n");
+//   }
+
+//   if (f_len != b_len) {
+//     printf("ERROR: length mismatch for forward and backward traversal.\n");
+//     exit(1);
+//   } else {
+//     printf(
+//         "Validated: equal lengths (%d) for forward and backward traversal.\n",
+//         f_len);
+//   }
+// }
 
 /*
  * mm_init - Initialize the memory manager
@@ -308,6 +371,7 @@ static block_t *extend_heap(size_t words) {
     new_epilogue->allocated = ALLOC;
     new_epilogue->block_size = 0;
     /* Coalesce if the previous block was free */
+    list_push(block);
     return coalesce(block);
 }
 /* $end mmextendheap */
@@ -386,15 +450,14 @@ static block_t *coalesce(block_t *block) {
     }
 
     else if (prev_alloc && !next_alloc) { /* Case 2 */
-        list_pop(next_block);
         list_pop(block);
+        list_pop(next_block);
         /* Update header of current block to include next block's size */
         block->block_size += next_header->block_size;
         /* Update footer of next block to reflect new size */
         footer_t *next_footer = get_footer(block);
         next_footer->block_size = block->block_size;
         //Remove *2nd* part of block from list
-        list_push(block);
     }
 
     else if (!prev_alloc && next_alloc) { /* Case 3 */
@@ -405,13 +468,12 @@ static block_t *coalesce(block_t *block) {
         /* Update footer of current block to reflect new size */
         footer_t *footer = get_footer(prev_block);
         footer->block_size = prev_block->block_size;
-        list_push(prev_block);
         block = prev_block;
     }
 
     else { /* Case 4 */
-        list_pop(block);
         list_pop(prev_block);
+        list_pop(block);
         list_pop(next_block);
         /* Update header of prev block to include current and next block's size */
         block_t *prev_block = (void *)prev_footer - prev_footer->block_size + sizeof(header_t);
@@ -420,10 +482,9 @@ static block_t *coalesce(block_t *block) {
         footer_t *next_footer = get_footer(prev_block);
         next_footer->block_size = prev_block->block_size;
         //Change pointers of list
-        list_push(prev_block);
         block = prev_block;
     }
-
+    list_push(block);
     return block;
 }
 

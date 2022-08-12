@@ -82,7 +82,7 @@ static block_t *prologue; /* pointer to first block */
  
 /* function prototypes for internal helper routines */
 static int segListIndex(int input);
-static block_t *extend_heap(size_t words);
+static block_t *extend_heap(size_t words, bool willCoalesce);
 static void place(block_t *block, size_t asize);
 static block_t *find_fit(size_t asize);
 static block_t *coalesce(block_t *block);
@@ -217,7 +217,11 @@ void *mm_malloc(size_t size) {
     //Optimization that improves performance by automatically extending heap for small malloc() calls
     if (asize <= 64){
         extendsize = asize;
-        extendwords = extendsize >> 3;
+        extendwords = extendsize >> 3;\
+        if(block=extend_heap(extendwords, false ) != NULL){
+            place(block,asize);
+            return block->body.payload;
+        }
     }
 
     /* Search the free list for a fit */
@@ -231,7 +235,7 @@ void *mm_malloc(size_t size) {
                      ? asize
                      : CHUNKSIZE;
     extendwords = extendsize >> 3; // extendsize/8
-    if ((block = extend_heap(extendwords)) != NULL) {
+    if ((block = extend_heap(extendwords, true)) != NULL) {
         place(block, asize);
         return block->body.payload;
     }
@@ -385,7 +389,7 @@ static void list_pop(block_t *removeblock, int index){
  * extend_heap - Extend heap with free block and return its block pointer
  */
 /* $begin mmextendheap */
-static block_t *extend_heap(size_t words) {
+static block_t *extend_heap(size_t words, bool willCoalesce) {
     block_t *block;
     uint32_t size;
     size = words << 3; // words*8
@@ -406,9 +410,12 @@ static block_t *extend_heap(size_t words) {
     new_epilogue->allocated = ALLOC;
     new_epilogue->block_size = 0;
     /* Coalesce if the previous block was free */
-    int blockIndex = segListIndex(block->block_size);
-    list_push(block, blockIndex);
-    return coalesce(block);
+    // int blockIndex = segListIndex(block->block_size);
+    // list_push(block, blockIndex);
+    if(willCoalesce == true){
+        return coalesce(block);
+    }
+    else return coalesce(block);
 }
 /* $end mmextendheap */
 

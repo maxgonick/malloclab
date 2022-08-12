@@ -70,12 +70,18 @@ enum block_state { FREE,
 #define CHUNKSIZE (1 << 16) /* initial heap size (bytes) */
 #define OVERHEAD (sizeof(header_t) + sizeof(footer_t)) /* overhead of the header and footer of an allocated block */
 #define MIN_BLOCK_SIZE (32) /* the minimum block size needed to keep in a freelist (header + footer + next pointer + prev pointer) */
+#define MAXBITS (16)
 
 /* Global variables */
+//Pointer to pointer to block_t (Making a continguous "array")
+static block_t **segListHead;
+//Tested and having 11 lists gives good performance as we can stick a lot of the smaller sized blocks in the same list, to reduce fragmentation
+static int TOTALNUMLIST = 11;
 static block_t *prologue; /* pointer to first block */
 static block_t *head; /* pointer to start of free list */
  
 /* function prototypes for internal helper routines */
+static int index(int input);
 static block_t *extend_heap(size_t words);
 static void place(block_t *block, size_t asize);
 static block_t *find_fit(size_t asize);
@@ -83,8 +89,8 @@ static block_t *coalesce(block_t *block);
 static footer_t *get_footer(block_t *block);
 static void printblock(block_t *block);
 static void checkblock(block_t *block);
-static void list_push(block_t *newblock);
-static void list_pop(block_t *removeblock);
+static void list_push(block_t *newblock, int index);
+static void list_pop(block_t *removeblock, int index);
 
 // static void debug_explicit_list(int depth) {
 //   printf("\nDEBUG EXPLICIT LIST: \n");
@@ -154,6 +160,12 @@ static void list_pop(block_t *removeblock);
  */
 /* $begin mminit */
 int mm_init(void) {
+    //Put pointers to the different seglists at the beginning of the heap
+    segListHead = mem_sbrk(sizeof(block_t **) * TOTALNUMLIST);
+    //Set all the pointers to NULL to avoid garbages
+    for(int i = 0; i < TOTALNUMLIST; i++){
+        segListHead[i] = NULL;
+    }
     /* create the initial empty heap */
     if ((prologue = mem_sbrk(CHUNKSIZE)) == (void*)-1)
         return -1;
@@ -170,8 +182,8 @@ int mm_init(void) {
     footer_t *init_footer = get_footer(init_block);
     init_footer->allocated = FREE;
     init_footer->block_size = init_block->block_size;
-    /* Put head pointer on first free block */
-    head = init_block;
+    /* Put last seglist on first free block */
+    segListHead[TOTALNUMLIST - 1] = init_block;
     /* initialize the epilogue - block size 0 will be used as a terminating condition */
     block_t *epilogue = (void *)init_block + init_block->block_size;
     epilogue->allocated = ALLOC;
@@ -288,40 +300,56 @@ void mm_checkheap(int verbose) {
 
 /* The remaining routines are internal helper routines */
 
+static inline int logBaseTwo(int input){
+    int result = 0;
+    //Log base 2 is the same as number of times you can divide by 2 (which is bitshift to the right)
+    while(input >>= 1){
+        result++;
+    }
+    return result;
+}
+
+static int SegListindex(int input){
+    //Blocks will be sent to lists depending on size (with a bias of -5, so smaller size blocks will all together (consequence of 2^n function starting slow and jumping up quickly))
+    int index = logBaseTwo(input) - 5;
+    //Put bounds on the index such that that maximum block sizes are restricted to a specific index of TOTALNUMLSIT - 5
+    return (index < (TOTALNUMLIST - 5)) ? index : (TOTALNUMLIST - 5);
+}
+
 // Adding newly freed block onto linked list
-static void list_push(block_t *newblock){
+static void list_push(block_t *newblock, int index){
     
     //If list is empty
-    if(head == NULL){
-       head = newblock; 
+    if(segListHead[index] == NULL){
+       segListHead[index] = newblock; 
        newblock->body.prev = NULL;
        newblock->body.next = NULL;
     }
     else{
         //Setting up newblock pointers
-    newblock->body.next = head;
+    newblock->body.next = segListHead[index];
     newblock->body.prev = NULL; 
-    head->body.prev = newblock;
-    head = newblock;
+    segListHead[index]->body.prev = newblock;
+    segListHead[index] = newblock;
     }
     
     return;
 }
 
 // Removing free block from list
-static void list_pop(block_t *removeblock){
+static void list_pop(block_t *removeblock, int index){
 
     //Case 1 (Only block in list)
     if(removeblock->body.prev == NULL && removeblock->body.next == NULL){
-        head = NULL;
+        segListHead[index] = NULL;
         removeblock->body.next = NULL;
         removeblock->body.prev = NULL;
         return;
     }
 
     //Case 2 (First block in list)
-    else if(head == removeblock){
-        head = removeblock->body.next;
+    else if(segListHead[index] == removeblock){
+        segListHead[index] = removeblock->body.next;
         removeblock->body.next->body.prev = NULL;
         removeblock->body.prev = NULL;
         return;
@@ -384,8 +412,9 @@ static block_t *extend_heap(size_t words) {
 static void place(block_t *block, size_t asize) {
     size_t split_size = block->block_size - asize;
     if (split_size >= MIN_BLOCK_SIZE) {
+        int indexNum = index(block->block_size);
         //Remove block from free list
-        list_pop(block);
+        list_pop(block, indexNum);
         /* split the block by updating the header and marking it allocated*/
         block->block_size = asize;
         block->allocated = ALLOC;
@@ -402,9 +431,11 @@ static void place(block_t *block, size_t asize) {
         new_footer->block_size = split_size;
         new_footer->allocated = FREE;
         //Add new_block to list
-        list_push(new_block);
+        int newIndexNum = index(block->block_size);
+        list_push(new_block, indexNum);
     } else {
-        list_pop(block);
+        int indexNum = index(block->block_size);
+        list_pop(block, indexNum);
         /* splitting the block will cause a splinter so we just include it in the allocated block */
         block->allocated = ALLOC;
         footer_t *footer = get_footer(block);
@@ -419,12 +450,13 @@ static void place(block_t *block, size_t asize) {
 static block_t *find_fit(size_t asize) {
     /* first fit search */
     block_t *b;
+    int sizeIndex = index(asize);
     //Checking if list is empty
-    if(head == NULL){
+    if(segListHead[sizeIndex] == NULL){
         return NULL;
     }
     //Starting at first block traverse using next pointers
-    for (b = head; b != NULL; b = b->body.next) {  //
+    for (b = head; segListHead[sizeIndex] != NULL; b = b->body.next) {  //
         /* block must be free and the size must be large enough to hold the request */
         if (!b->allocated && asize <= b->block_size) {
             return b;

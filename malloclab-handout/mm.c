@@ -39,7 +39,7 @@ team_t team = {
     /* UID */
     "705683791",
     /* Custom message (16 chars) */
-    "meep",
+    "meep3",
 };
 
 typedef struct {
@@ -78,10 +78,10 @@ static block_t **segListHead;
 //Tested and having 11 lists gives good performance as we can stick a lot of the smaller sized blocks in the same list, to reduce fragmentation
 static int TOTALNUMLIST = 11;
 static block_t *prologue; /* pointer to first block */
-static block_t *head; /* pointer to start of free list */
+// static block_t *head; /* pointer to start of free list */
  
 /* function prototypes for internal helper routines */
-static int index(int input);
+static int segListIndex(int input);
 static block_t *extend_heap(size_t words);
 static void place(block_t *block, size_t asize);
 static block_t *find_fit(size_t asize);
@@ -214,6 +214,12 @@ void *mm_malloc(size_t size) {
         asize = MIN_BLOCK_SIZE;
     }
 
+    //Optimization that improves performance by automatically extending heap for small malloc() calls
+    if (asize <= 64){
+        extendsize = asize;
+        extendwords = extendsize >> 3;
+    }
+
     /* Search the free list for a fit */
     if ((block = find_fit(asize)) != NULL) {
         place(block, asize);
@@ -244,7 +250,8 @@ void mm_free(void *payload) {
     block->allocated = FREE;
     footer_t *footer = get_footer(block);
     footer->allocated = FREE;
-    list_push(block);
+    int freeIndex = segListIndex(block->block_size);
+    list_push(block, freeIndex);
     coalesce(block);
 
 }
@@ -309,7 +316,7 @@ static inline int logBaseTwo(int input){
     return result;
 }
 
-static int SegListindex(int input){
+static int segListIndex(int input){
     //Blocks will be sent to lists depending on size (with a bias of -5, so smaller size blocks will all together (consequence of 2^n function starting slow and jumping up quickly))
     int index = logBaseTwo(input) - 5;
     //Put bounds on the index such that that maximum block sizes are restricted to a specific index of TOTALNUMLSIT - 5
@@ -399,7 +406,8 @@ static block_t *extend_heap(size_t words) {
     new_epilogue->allocated = ALLOC;
     new_epilogue->block_size = 0;
     /* Coalesce if the previous block was free */
-    list_push(block);
+    int blockIndex = segListIndex(block->block_size);
+    list_push(block, blockIndex);
     return coalesce(block);
 }
 /* $end mmextendheap */
@@ -412,7 +420,7 @@ static block_t *extend_heap(size_t words) {
 static void place(block_t *block, size_t asize) {
     size_t split_size = block->block_size - asize;
     if (split_size >= MIN_BLOCK_SIZE) {
-        int indexNum = index(block->block_size);
+        int indexNum = segListIndex(block->block_size);
         //Remove block from free list
         list_pop(block, indexNum);
         /* split the block by updating the header and marking it allocated*/
@@ -431,10 +439,10 @@ static void place(block_t *block, size_t asize) {
         new_footer->block_size = split_size;
         new_footer->allocated = FREE;
         //Add new_block to list
-        int newIndexNum = index(block->block_size);
-        list_push(new_block, indexNum);
+        int newIndexNum = segListIndex(block->block_size);
+        list_push(new_block, newIndexNum);
     } else {
-        int indexNum = index(block->block_size);
+        int indexNum = segListIndex(block->block_size);
         list_pop(block, indexNum);
         /* splitting the block will cause a splinter so we just include it in the allocated block */
         block->allocated = ALLOC;
@@ -450,13 +458,13 @@ static void place(block_t *block, size_t asize) {
 static block_t *find_fit(size_t asize) {
     /* first fit search */
     block_t *b;
-    int sizeIndex = index(asize);
+    int sizeIndex = segListIndex(asize);
     //Checking if list is empty
     if(segListHead[sizeIndex] == NULL){
         return NULL;
     }
     //Starting at first block traverse using next pointers
-    for (b = head; segListHead[sizeIndex] != NULL; b = b->body.next) {  //
+    for (b = segListHead[sizeIndex]; b != NULL; b = b->body.next) {  //
         /* block must be free and the size must be large enough to hold the request */
         if (!b->allocated && asize <= b->block_size) {
             return b;
@@ -482,31 +490,42 @@ static block_t *coalesce(block_t *block) {
     }
 
     else if (prev_alloc && !next_alloc) { /* Case 2 */
-        list_pop(block);
-        list_pop(next_block);
-        /* Update header of current block to include next block's size */
+        int coalesceIndex = segListIndex(block->block_size);
+        list_pop(block, coalesceIndex);
+         coalesceIndex = segListIndex(next_block->block_size);
+        list_pop(next_block, coalesceIndex);
+        /* Update header of current block o include next block's size */
         block->block_size += next_header->block_size;
         /* Update footer of next block to reflect new size */
         footer_t *next_footer = get_footer(block);
         next_footer->block_size = block->block_size;
         //Remove *2nd* part of block from list
+        coalesceIndex = segListIndex(block->block_size);
+        list_push(block, coalesceIndex);
     }
 
     else if (!prev_alloc && next_alloc) { /* Case 3 */
-        list_pop(block);
-        list_pop(prev_block);
+        int coalesceIndex = segListIndex(block->block_size);
+        list_pop(block, coalesceIndex);
+         coalesceIndex = segListIndex(prev_block->block_size);
+        list_pop(prev_block, coalesceIndex);
         /* Update header of prev block to include current block's size */
         prev_block->block_size += block->block_size;
         /* Update footer of current block to reflect new size */
         footer_t *footer = get_footer(prev_block);
         footer->block_size = prev_block->block_size;
         block = prev_block;
+         coalesceIndex = segListIndex(block->block_size);
+        list_push(block, coalesceIndex);
     }
 
     else { /* Case 4 */
-        list_pop(prev_block);
-        list_pop(block);
-        list_pop(next_block);
+    int coalesceIndex = segListIndex(prev_block->block_size);
+        list_pop(prev_block, coalesceIndex);
+        coalesceIndex = segListIndex(block->block_size);
+        list_pop(block, coalesceIndex);
+        coalesceIndex = segListIndex(next_block->block_size);
+        list_pop(next_block, coalesceIndex);
         /* Update header of prev block to include current and next block's size */
         block_t *prev_block = (void *)prev_footer - prev_footer->block_size + sizeof(header_t);
         prev_block->block_size += block->block_size + next_header->block_size;
@@ -515,8 +534,9 @@ static block_t *coalesce(block_t *block) {
         next_footer->block_size = prev_block->block_size;
         //Change pointers of list
         block = prev_block;
+        coalesceIndex = segListIndex(block->block_size);
+        list_push(block, coalesceIndex);
     }
-    list_push(block);
     return block;
 }
 

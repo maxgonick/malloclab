@@ -92,69 +92,6 @@ static void checkblock(block_t *block);
 static void list_push(block_t *newblock, int index);
 static void list_pop(block_t *removeblock, int index);
 
-// static void debug_explicit_list(int depth) {
-//   printf("\nDEBUG EXPLICIT LIST: \n");
-
-//   if (head == NULL) {
-//     printf("0 elements.\n");
-//     return;
-//   }
-
-//   int f_len = 0;
-//   int b_len = 0;
-
-//   // Traverse forward.
-//   block_t *forward = head;
-//   int f_idx = 0;
-
-//   for (; f_idx < depth; f_idx++) {
-//     if (forward->body.next == NULL) {
-//       printf("%p (%d bytes) TAIL\n", forward, forward->block_size);
-//       f_len++;
-//       printf("  Forward traversal: %d elements.\n", f_len);
-//       break;
-//     }
-
-//     printf("%p (%d bytes) -> ", forward, forward->block_size);
-//     forward = forward->body.next;
-//     f_len++;
-//   }
-
-//   if (f_idx == depth) {
-//     printf("\nWARNING: Reached forward depth limit.\n");
-//   }
-
-//   // Traverse backwards.
-//   block_t *backward = forward;
-//   int b_idx = 0;
-
-//   for (; b_idx < depth; b_idx++) {
-//     if (backward->body.prev == NULL) {
-//       printf("%p (%d bytes) HEAD\n", backward, backward->block_size);
-//       b_len++;
-//       printf("  Backward traversal: %d elements.\n", b_len);
-//       break;
-//     }
-
-//     printf("%p (%d bytes) -> ", backward, backward->block_size);
-//     backward = backward->body.prev;
-//     b_len++;
-//   }
-
-//   if (b_idx == depth) {
-//     printf("\nWARNING: Reached backward depth limit.\n");
-//   }
-
-//   if (f_len != b_len) {
-//     printf("ERROR: length mismatch for forward and backward traversal.\n");
-//     exit(1);
-//   } else {
-//     printf(
-//         "Validated: equal lengths (%d) for forward and backward traversal.\n",
-//         f_len);
-//   }
-// }
-
 /*
  * mm_init - Initialize the memory manager
  */
@@ -215,10 +152,12 @@ void *mm_malloc(size_t size) {
     }
 
     //Optimization that improves performance by automatically extending heap for small malloc() calls
-    if (asize <= 64){
+    if (asize <= 96){
         extendsize = asize;
-        extendwords = extendsize >> 3;\
-        if(block=extend_heap(extendwords, false ) != NULL){
+        extendwords = extendsize >> 3;
+       block = extend_heap(extendwords, false );
+        if(block != NULL){
+
             place(block,asize);
             return block->body.payload;
         }
@@ -311,20 +250,15 @@ void mm_checkheap(int verbose) {
 
 /* The remaining routines are internal helper routines */
 
-static inline int logBaseTwo(int input){
-    int result = 0;
-    //Log base 2 is the same as number of times you can divide by 2 (which is bitshift to the right)
-    while(input >>= 1){
-        result++;
-    }
-    return result;
+static inline int logBaseTwo(int input){ 
+    return 31 - __builtin_clz(input);
 }
 
 static int segListIndex(int input){
     //Blocks will be sent to lists depending on size (with a bias of -5, so smaller size blocks will all together (consequence of 2^n function starting slow and jumping up quickly))
     int index = logBaseTwo(input) - 5;
     //Put bounds on the index such that that maximum block sizes are restricted to a specific index of TOTALNUMLSIT - 5
-    return (index < (TOTALNUMLIST - 5)) ? index : (TOTALNUMLIST - 5);
+    return (index < (TOTALNUMLIST - 1)) ? index : (TOTALNUMLIST - 1);
 }
 
 // Adding newly freed block onto linked list
@@ -353,8 +287,6 @@ static void list_pop(block_t *removeblock, int index){
     //Case 1 (Only block in list)
     if(removeblock->body.prev == NULL && removeblock->body.next == NULL){
         segListHead[index] = NULL;
-        removeblock->body.next = NULL;
-        removeblock->body.prev = NULL;
         return;
     }
 
@@ -362,13 +294,13 @@ static void list_pop(block_t *removeblock, int index){
     else if(segListHead[index] == removeblock){
         segListHead[index] = removeblock->body.next;
         removeblock->body.next->body.prev = NULL;
-        removeblock->body.prev = NULL;
+
         return;
     }
     //Case 3 (Last block in list)
     else if(removeblock->body.next == NULL){
         removeblock->body.prev->body.next = NULL;
-        removeblock->body.prev = NULL;
+
         return;
     }
     //Case 4 (Middle of list)
@@ -378,8 +310,7 @@ static void list_pop(block_t *removeblock, int index){
         //Set pointer for previous block
         removeblock->body.prev->body.next = removeblock->body.next;
         //null out removeblock pointer
-        removeblock->body.next = NULL;
-        removeblock->body.prev = NULL;
+
         return;
     }
 
@@ -410,12 +341,13 @@ static block_t *extend_heap(size_t words, bool willCoalesce) {
     new_epilogue->allocated = ALLOC;
     new_epilogue->block_size = 0;
     /* Coalesce if the previous block was free */
-    // int blockIndex = segListIndex(block->block_size);
-    // list_push(block, blockIndex);
+    //Creating new segList block
+    int blockIndex = segListIndex(block->block_size);
+    list_push(block, blockIndex);
     if(willCoalesce == true){
         return coalesce(block);
     }
-    else return coalesce(block);
+    else return block;
 }
 /* $end mmextendheap */
 
@@ -446,8 +378,8 @@ static void place(block_t *block, size_t asize) {
         new_footer->block_size = split_size;
         new_footer->allocated = FREE;
         //Add new_block to list
-        int newIndexNum = segListIndex(block->block_size);
-        list_push(new_block, newIndexNum);
+        indexNum = segListIndex(new_block->block_size);
+        list_push(new_block, indexNum);
     } else {
         int indexNum = segListIndex(block->block_size);
         list_pop(block, indexNum);
@@ -466,17 +398,18 @@ static block_t *find_fit(size_t asize) {
     /* first fit search */
     block_t *b;
     int sizeIndex = segListIndex(asize);
-    //Checking if list is empty
-    if(segListHead[sizeIndex] == NULL){
-        return NULL;
-    }
+
+    //Indexing over different segLists
+    for(int i = sizeIndex; i < TOTALNUMLIST; i++){
+
     //Starting at first block traverse using next pointers
-    for (b = segListHead[sizeIndex]; b != NULL; b = b->body.next) {  //
+    for (b = segListHead[i]; b != NULL; b = b->body.next) {  //
         /* block must be free and the size must be large enough to hold the request */
         if (!b->allocated && asize <= b->block_size) {
             return b;
         }
     }
+}
     return NULL; /* no fit */
 }
 

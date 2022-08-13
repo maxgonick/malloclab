@@ -1,6 +1,13 @@
-make debug --dry-run --keep-going --print-directory
+make debug --dry-run --always-make --keep-going --print-directory
 make: Entering directory '/home/maxgonick/Desktop/malloc/malloclab/malloclab-handout'
 rm -f *~ *.o mdriver
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o mdriver.o mdriver.c
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o mm.o mm.c
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o memlib.o memlib.c
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o fsecs.o fsecs.c
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o fcyc.o fcyc.c
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o clock.o clock.c
+gcc -Wall -g -std=gnu99 -fsanitize=address   -c -o ftimer.o ftimer.c
 gcc -Wall -g -std=gnu99 -fsanitize=address -o mdriver mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 make: Leaving directory '/home/maxgonick/Desktop/malloc/malloclab/malloclab-handout'
  

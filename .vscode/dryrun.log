@@ -1,0 +1,6 @@
+make --dry-run --keep-going --print-directory
+make: Entering directory '/home/maxgonick/Desktop/malloc/malloclab'
+make: Leaving directory '/home/maxgonick/Desktop/malloc/malloclab'
+ 
+make: *** No targets specified and no makefile found.  Stop.
+
